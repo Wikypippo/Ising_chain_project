@@ -51,7 +51,7 @@ gcc -O3 -fopenmp main_seriale.c -o main_seriale -lm
 
 Shared-memory parallel implementation using OpenMP.
 
-Depending on compilation, this version can still use a dense or partially optimized representation.
+Depending on compilation, this version still use a dense representation.
 
 ### Compile
 
