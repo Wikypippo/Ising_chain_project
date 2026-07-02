@@ -21,10 +21,10 @@ The ground state is computed using **Imaginary Time Evolution (ITE)**, and the c
 The repository contains three main implementations:
 
 - `main_seriale.c` → serial dense-matrix baseline
-- `main_parallelo.c` → OpenMP parallel dense / matrix-free intermediate version
+- `main_parallelo.c` → OpenMP parallel dense version with optional MPI support
 - `main_matrixfree.c` → optimized matrix-free version with optional MPI support
 
-All codes support OpenMP. MPI is enabled via the `-DUSE_MPI` compilation flag.
+MPI is enabled via the `-DUSE_MPI` compilation flag.
 
 ---
 
