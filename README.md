@@ -1,179 +1,142 @@
 # Transverse-Field Ising Chain Simulation
 
-This repository contains a High-Performance Computing (HPC) implementation of the one-dimensional Transverse-Field Ising Model (TFIM). The project focuses on computing the **ground-state energy** and the **squared magnetization** ($\langle M_z^2 \rangle$) in order to investigate the quantum phase transition (QPT) at zero temperature.
+This repository contains a High-Performance Computing (HPC) implementation of the one-dimensional Transverse-Field Ising Model (TFIM).
+
+The project focuses on computing the **ground-state energy** and the **squared magnetization** ($\langle M_z^2 \rangle$) in order to study the quantum phase transition (QPT) at zero temperature.
+
+---
 
 ## Project Overview
 
 The exact simulation of quantum many-body systems is fundamentally limited by the exponential growth of the Hilbert space, whose dimension scales as $2^N$, where $N$ is the number of spins.
 
-This project investigates the computational limits of exact diagonalization by progressively optimizing the simulation architecture to overcome hardware bottlenecks, particularly the **memory wall**. The ground state is obtained through **Imaginary Time Evolution (ITE)**.
+This project explores the computational limits of exact diagonalization and imaginary time evolution by progressively optimizing the implementation to overcome key HPC bottlenecks, particularly the **memory wall**.
 
-## Key Optimizations
-
-### Matrix-Free Hamiltonian
-
-A dense Hamiltonian representation requires storing a $2^N \times 2^N$ matrix, quickly exhausting both memory capacity and memory bandwidth.
-
-The final implementation computes the action of the Hamiltonian on the state vector **on-the-fly** using bitwise operations, reducing the memory complexity from
-
-$$
-\mathcal{O}(2^{2N})
-$$
-
-to
-
-$$
-\mathcal{O}(2^N),
-$$
-
-allowing the working set to remain almost entirely within the CPU caches.
-
-### Hybrid Parallelization (MPI + OpenMP)
-
-The computation is parallelized at two levels:
-
-- **MPI** distributes independent simulations across different values of the transverse field $h$.
-- **OpenMP** parallelizes the matrix-vector operations within each MPI process.
-
-This hybrid approach efficiently exploits both distributed-memory and shared-memory architectures.
-
-### Optimized Observable Evaluation
-
-Instead of computing the root-mean-square (RMS) magnetization, the implementation directly evaluates the squared magnetization,
-
-$$
-\langle M_z^2 \rangle,
-$$
-
-avoiding unnecessary `sqrt()` calls inside the computationally intensive loops.
-
----
-
-# Repository Structure
-
-| File | Description |
-|------|-------------|
-| `main_seriale.c` | Baseline serial implementation using a dense Hamiltonian matrix. |
-| `pmain.c` | Parallel dense-matrix implementation (MPI/OpenMP), mainly used to illustrate cache-thrashing effects. |
-| `pmain_sparse.c` | Final optimized Matrix-Free implementation with hybrid MPI + OpenMP parallelization. |
+The ground state is computed using **Imaginary Time Evolution (ITE)**, and the code evolves through multiple levels of optimization, from a dense-matrix serial approach to a fully hybrid MPI + OpenMP matrix-free solver.
 
 ---
 
 # Compilation and Execution
 
-The project is written in **C** and requires:
+The repository contains three main implementations:
 
-- GCC
-- OpenMP
-- OpenMPI (only for the hybrid version)
+- `main_seriale.c` → serial dense-matrix baseline
+- `main_parallelo.c` → OpenMP parallel dense / matrix-free intermediate version
+- `main_matrixfree.c` → optimized matrix-free version with optional MPI support
 
-## 1. Serial Version (Dense Matrix)
+All codes support OpenMP. MPI is enabled via the `-DUSE_MPI` compilation flag.
 
-Suitable for small systems ($N \lesssim 10$).
+---
+
+## 1. Serial Dense Matrix Version
+
+Baseline implementation using an explicit $2^N \times 2^N$ Hamiltonian matrix.  
+Used for validation and to highlight memory scaling limitations.
+
+### Compile
 
 ```bash
-gcc -O3 main_seriale.c -o main -lm
+gcc -O3 -fopenmp main_seriale.c -o main_seriale -lm
 ```
 
-Run:
+### Run
 
 ```bash
-./main 10
+./main_seriale 10
 ```
 
 ---
 
-## 2. Shared-Memory Version (OpenMP)
+## 2. OpenMP Parallel Version (No MPI)
 
-Optimized Matrix-Free implementation for multicore CPUs.
+Shared-memory parallel implementation using OpenMP.
 
-Compile:
+Depending on compilation, this version can still use a dense or partially optimized representation.
+
+### Compile
 
 ```bash
-gcc -O3 -fopenmp pmain_sparse.c -o smain1 -lm
+gcc -O3 -fopenmp main_parallelo.c -o main_parallelo -lm
 ```
 
-Run on four threads:
+### Run
 
 ```bash
-export OMP_NUM_THREADS=4
-./smain1 15
+./main_parallelo 10
 ```
 
 ---
 
-## 3. Hybrid MPI + OpenMP Version
+## 3. MPI + OpenMP Parallel Version
 
-Designed for distributed-memory HPC clusters.
+Hybrid distributed-memory + shared-memory implementation.
 
-Compile:
+MPI distributes independent simulations over different transverse field values $h$, while OpenMP parallelizes inner computations.
+
+### Compile
 
 ```bash
-mpicc -O3 -fopenmp -DUSE_MPI pmain_sparse.c -o smain -lm
+mpicc -O3 -fopenmp -DUSE_MPI main_parallelo.c -o main_parallelo_mpi -lm
 ```
 
-Run using two MPI processes and two OpenMP threads per process:
+### Run
 
 ```bash
-export OMP_NUM_THREADS=2
-mpirun --mca btl tcp,self --oversubscribe -np 2 ./smain 10
+mpirun --oversubscribe -np 2 ./main_parallelo_mpi 10
 ```
 
 ---
 
-# Performance Profiling
+## 4. Matrix-Free OpenMP Version (No MPI)
 
-The implementation was profiled using the Linux `perf` tool to evaluate CPU performance, including:
+Fully optimized implementation using a matrix-free Hamiltonian.
 
-- Instructions per Cycle (IPC)
-- Cache references
-- Cache misses
-- Overall execution time
+The Hamiltonian action is computed on-the-fly using bitwise operations, removing the need to store the full $2^N \times 2^N$ matrix.
 
-Example:
+### Compile
 
 ```bash
-perf stat \
--e task-clock,cycles,instructions,cache-references,cache-misses \
-./smain1 15
+gcc -O3 -fopenmp main_matrixfree.c -o main_matrixfree_omp -lm
+```
+
+### Run
+
+```bash
+./main_matrixfree_omp 10
 ```
 
 ---
 
-# Program Output
+## 5. Matrix-Free MPI + OpenMP Version (Final Optimized)
 
-The simulation produces CSV-formatted output with the following columns:
+Fully optimized hybrid implementation:
 
-```text
-h,Energy,Mz2
+- MPI distributes simulations over different values of the transverse field $h$
+- OpenMP parallelizes the matrix-free Hamiltonian-vector product
+- Memory footprint reduced from exponential matrix storage to $\mathcal{O}(2^N)$ state vectors only
+
+MPI is enabled via `-DUSE_MPI`.
+
+### Compile
+
+```bash
+mpicc -O3 -fopenmp -DUSE_MPI main_matrixfree.c -o main_matrixfree_mpi -lm
 ```
 
-where:
+### Run
 
-- **h** is the transverse magnetic field,
-- **Energy** is the estimated ground-state energy,
-- **Mz2** is the expectation value $\langle M_z^2 \rangle$.
-
-The transverse field is sampled in the interval
-
-$$
-0 \le h \le 1,
-$$
-
-approaching the critical point
-
-$$
-h_c = 1.
-$$
+```bash
+mpirun --oversubscribe -np 2 ./main_matrixfree_mpi 10
+```
 
 ---
 
-# Main Features
+# Key Features
 
 - Exact simulation of the 1D Transverse-Field Ising Model
 - Imaginary Time Evolution ground-state solver
-- Matrix-Free Hamiltonian implementation
-- Hybrid MPI + OpenMP parallelization
-- Cache-friendly memory layout
-- Optimized observable computation
-- Performance profiling with Linux `perf`
+- Progressive optimization from dense to matrix-free formulations
+- OpenMP parallelization for shared-memory systems
+- MPI + OpenMP hybrid scaling for distributed systems
+- Cache-friendly and memory-efficient implementation
+- Performance profiling support via `perf`
