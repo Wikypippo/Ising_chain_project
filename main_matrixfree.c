@@ -6,6 +6,7 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
+#include <papi.h>
 
 double* calcola_ground_state_matrix_free(int N, double J, double h, double* energia_out) {
     long int dim = 1L << N;
@@ -90,6 +91,18 @@ double calcola_Mz2(int N, double* GS) {
 int main(int argc, char** argv) {
     int rank = 0, size = 1;
     double start_time;
+
+    // Inizializzazione PAPI
+    if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT) {
+        fprintf(stderr, "Errore PAPI init!\n");
+        return 1;
+    }
+    int EventSet = PAPI_NULL;
+    PAPI_create_eventset(&EventSet);
+    PAPI_add_event(EventSet, PAPI_TOT_CYC);
+    PAPI_add_event(EventSet, PAPI_TOT_INS);
+    long long Values[2] = {0, 0};
+
     
     // Inizzializzazione
     #ifdef USE_MPI
@@ -139,7 +152,10 @@ int main(int argc, char** argv) {
     start_time = omp_get_wtime();
     #endif
 
-    // Calcolo
+    // Inizio profilazione
+    PAPI_start(EventSet);
+
+    // Ciclo con variazione di h
     for (int i = 0; i < local_steps; i++) {
         double h_corrente = (start_step + i) * 0.05;
         local_h[i] = h_corrente;
@@ -149,6 +165,7 @@ int main(int argc, char** argv) {
         local_Mz[i] = calcola_Mz2(N_spin, GS);
         free(GS);
     }
+    PAPI_stop(EventSet, Values);
 
     // Raccoglimento dei risultati
     #ifndef USE_MPI
@@ -179,6 +196,13 @@ int main(int argc, char** argv) {
         free(global_h); free(global_E); free(global_Mz);
         free(recvcounts); free(displs);
     }
+
+     // Stampa risultati PAPI
+    printf("\n--- RISULTATI HARDWARE (PAPI) ---\n");
+    printf("Cicli Totali (CYC)      : %lld\n", Values[0]);
+    printf("Istruzioni Totali (INS) : %lld\n", Values[1]);
+    printf("IPC Calcolato           : %.2f\n", (double)Values[1] / (double)Values[0]);
+    printf("---------------------------------\n");
 
     // Deallocazione della memoria
     free(local_h); free(local_E); free(local_Mz);

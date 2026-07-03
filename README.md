@@ -96,7 +96,7 @@ The Hamiltonian action is computed on-the-fly using bitwise operations, removing
 ### Compile
 
 ```bash
-gcc -O3 -fopenmp main_matrixfree.c -o main_matrixfree_omp -lm
+gcc -O3 -fopenmp main_matrixfree.c -o main_matrixfree_omp -lm -lpapi
 ```
 
 ### Run
@@ -120,7 +120,7 @@ MPI is enabled via `-DUSE_MPI`.
 ### Compile
 
 ```bash
-mpicc -O3 -fopenmp -DUSE_MPI main_matrixfree.c -o main_matrixfree_mpi -lm
+mpicc -O3 -fopenmp -DUSE_MPI main_matrixfree.c -o main_matrixfree_mpi -lm -lpapi
 ```
 
 ### Run
